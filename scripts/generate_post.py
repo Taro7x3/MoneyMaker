@@ -1,73 +1,99 @@
 import os
+import re
 from datetime import datetime
-from amazon_paapi import AmazonApi
+import requests
+from bs4 import BeautifulSoup
 
-def generate_post():
-    # --- 1. API Credentials (from GitHub Secrets) ---
-    access_key = os.getenv("PAAPI_ACCESS_KEY")
-    secret_key = os.getenv("PAAPI_SECRET_KEY")
+def get_product_details(url, associate_tag):
+    """
+    Given an Amazon URL, fetch the page and extract product details.
+    """
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Accept-Language': 'ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7',
+    }
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status() # Raise an exception for bad status codes
+        soup = BeautifulSoup(response.content, 'html.parser')
+
+        # --- Extract Title ---
+        title_element = soup.select_one('#productTitle')
+        title = title_element.get_text(strip=True) if title_element else "No Title Found"
+
+        # --- Extract Price ---
+        price_element = soup.select_one('.a-price .a-offscreen')
+        price = price_element.get_text(strip=True) if price_element else "Price Not Found"
+
+        # --- Extract Image URL ---
+        image_element = soup.select_one('#landingImage')
+        image_url = image_element['src'] if image_element else ""
+        
+        # --- Extract ASIN and build affiliate URL ---
+        asin_match = re.search(r'/dp/([A-Z0-9]{10})', url)
+        if asin_match:
+            asin = asin_match.group(1)
+            affiliate_url = f"https://www.amazon.co.jp/dp/{asin}/?tag={associate_tag}"
+        else:
+            affiliate_url = url # Fallback
+
+        return {
+            "title": title,
+            "price": price,
+            "url": affiliate_url,
+            "image_url": image_url,
+        }
+    except Exception as e:
+        print(f"🔴 Error fetching/parsing URL {url}: {e}")
+        return None
+
+def generate_post_from_urls():
+    """
+    Reads a list of URLs from urls.txt and generates a Markdown post.
+    """
     associate_tag = os.getenv("ASSOCIATE_TAG")
-    
-    if not all([access_key, secret_key, associate_tag]):
-        print("🔴 Error: API credentials not found in environment variables.")
+    if not associate_tag:
+        print("🔴 Error: ASSOCIATE_TAG not found in environment variables.")
         return
 
-    # --- 2. Connect to Amazon API ---
     try:
-        amazon = AmazonApi(access_key, secret_key, associate_tag, "JP")
-    except Exception as e:
-        print(f"🔴 Error connecting to Amazon API: {e}")
+        with open("urls.txt", "r", encoding="utf-8") as f:
+            urls = [line.strip() for line in f if line.strip()]
+    except FileNotFoundError:
+        print("🟡 Info: urls.txt not found. Skipping post generation.")
+        return
+        
+    if not urls:
+        print("🟡 Info: urls.txt is empty. Skipping post generation.")
         return
 
-    # --- 3. Search for Products ---
-    search_keywords = "PCモニター 4K"
-    try:
-        # FIX: Removed 'ItemInfo.Title' from resources as the library includes it by default.
-        search_result = amazon.search_items(
-            keywords=search_keywords,
-            item_count=10,
-            resources=[
-                "Images.Primary.Medium",
-                "Offers.Listings.Price",
-            ],
-        )
-    except Exception as e:
-        print(f"🔴 Error searching for items: {e}")
-        return
-
-    # --- 4. Filter and Process Products ---
+    # --- Fetch product details for each URL ---
+    print(f"ℹ️ Found {len(urls)} URLs. Fetching details...")
     products = []
-    if search_result.items:
-        for item in search_result.items:
-            # The library returns ItemInfo by default, so we can safely access it.
-            if item.item_info and item.item_info.title and item.offers and item.offers.listings and item.offers.listings[0].price:
-                products.append({
-                    "title": item.item_info.title.display_value,
-                    "price": item.offers.listings[0].price.display_amount,
-                    "url": item.detail_page_url,
-                    "image_url": item.images.primary.medium.url,
-                })
-            if len(products) >= 5:
-                break
-
+    for url in urls[:5]: # Process up to 5 URLs
+        details = get_product_details(url, associate_tag)
+        if details:
+            products.append(details)
+    
     if not products:
-        print("🟡 Warning: No products with price information found. This could be due to API limitations (e.g., needing 3 sales).")
+        print("🔴 Error: Could not fetch details for any of the URLs.")
         return
 
-    # --- 5. Generate Markdown Content ---
+    # --- Generate Markdown Content ---
     today = datetime.now().strftime("%Y-%m-%d")
-    sanitized_keywords = search_keywords.replace(" ", "-").lower()
-    filename = f"{today}-{sanitized_keywords}-ranking.md"
+    # Use a generic title as we don't have a single search keyword anymore
+    post_title = f"【{today}更新】編集部おすすめガジェットランキングTOP{len(products)}"
+    filename = f"{today}-recommended-gadgets-ranking.md"
     
     markdown_content = f"""---
-title: "【{today}更新】{search_keywords} おすすめ人気ランキングTOP5"
+title: "{post_title}"
 date: {datetime.now().isoformat()}
 draft: false
-tags: ["Ranking", "Gadget", "{search_keywords}"]
+tags: ["Ranking", "Gadget", "Recommendation"]
 categories: ["Automated Ranking"]
 ---
 
-AIエージェントのクローが、Amazonの最新データから「{search_keywords}」のおすすめ人気ランキングTOP5を自動生成しました。日々の価格変動をチェックして、賢い買い物をサポートします！
+AIエージェントのクローと編集部が厳選した、おすすめガジェットランキングTOP{len(products)}を自動生成しました。日々の価格変動をチェックして、賢い買い物をサポートします！
 
 """
 
@@ -84,15 +110,15 @@ AIエージェントのクローが、Amazonの最新データから「{search_k
 ***
 """
     
-    # --- 6. Write to File ---
+    # --- Write to File ---
     output_path = os.path.join("content", "posts", filename)
     try:
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(markdown_content)
-        print(f"✅ Successfully generated post: {output_path}")
+        print(f"✅ Successfully generated post from URL list: {output_path}")
     except Exception as e:
         print(f"🔴 Error writing to file: {e}")
 
 
 if __name__ == "__main__":
-    generate_post()
+    generate_post_from_urls()
