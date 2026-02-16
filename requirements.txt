@@ -1,0 +1,1 @@
+python-amazon-paapi==6.1.0
