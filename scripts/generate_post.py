@@ -1,51 +1,73 @@
 import os
 import re
+import time
 from datetime import datetime
 import requests
 from bs4 import BeautifulSoup
 
 def get_product_details(url, associate_tag):
     """
-    Given an Amazon URL, fetch the page and extract product details.
+    Given an Amazon URL, fetch the page, handle retries, and extract product details.
     """
+    # 1. URL Normalization: Extract ASIN and create a clean, canonical URL.
+    asin_match = re.search(r'/dp/([A-Z0-9]{10})', url)
+    if not asin_match:
+        print(f"Warning: Could not find a valid ASIN in URL: {url}. Skipping.")
+        return None
+    asin = asin_match.group(1)
+    normalized_url = f"https://www.amazon.co.jp/dp/{asin}"
+
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         'Accept-Language': 'ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7',
     }
-    try:
-        response = requests.get(url, headers=headers)
-        response.raise_for_status() # Raise an exception for bad status codes
-        soup = BeautifulSoup(response.content, 'html.parser')
 
-        # --- Extract Title ---
-        title_element = soup.select_one('#productTitle')
-        title = title_element.get_text(strip=True) if title_element else "No Title Found"
+    # 2. Retry Logic: Attempt to fetch the page up to 3 times.
+    for attempt in range(3):
+        try:
+            print(f"Fetching (Attempt {attempt + 1}/3): {normalized_url}")
+            response = requests.get(normalized_url, headers=headers, timeout=10)
+            response.raise_for_status()
+            
+            # Check if we got a CAPTCHA page by looking for its title.
+            if "Amazon CAPTCHA" in response.text:
+                print(f"Warning: CAPTCHA detected for {normalized_url}. Retrying after a delay...")
+                time.sleep(2 * (attempt + 1)) # Increase delay with each retry
+                continue
 
-        # --- Extract Price ---
-        price_element = soup.select_one('.a-price .a-offscreen')
-        price = price_element.get_text(strip=True) if price_element else "Price Not Found"
+            soup = BeautifulSoup(response.content, 'html.parser')
 
-        # --- Extract Image URL ---
-        image_element = soup.select_one('#landingImage')
-        image_url = image_element['src'] if image_element else ""
-        
-        # --- Extract ASIN and build affiliate URL ---
-        asin_match = re.search(r'/dp/([A-Z0-9]{10})', url)
-        if asin_match:
-            asin = asin_match.group(1)
+            # 3. Robust Data Extraction
+            title_element = soup.select_one('#productTitle')
+            title = title_element.get_text(strip=True) if title_element else None
+
+            price_element = soup.select_one('.a-price .a-offscreen')
+            price = price_element.get_text(strip=True) if price_element else None
+
+            image_element = soup.select_one('#landingImage')
+            image_url = image_element['src'] if image_element else None
+            
+            # If we can't find the title or price, it's not a valid product page.
+            if not title or not price:
+                print(f"Warning: Could not extract title or price for {normalized_url}. Skipping.")
+                return None
+            
             affiliate_url = f"https://www.amazon.co.jp/dp/{asin}/?tag={associate_tag}"
-        else:
-            affiliate_url = url # Fallback
 
-        return {
-            "title": title,
-            "price": price,
-            "url": affiliate_url,
-            "image_url": image_url,
-        }
-    except Exception as e:
-        print(f"🔴 Error fetching/parsing URL {url}: {e}")
-        return None
+            print(f"Success: Found '{title}'")
+            return {
+                "title": title,
+                "price": price,
+                "url": affiliate_url,
+                "image_url": image_url,
+            }
+
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching URL {normalized_url} on attempt {attempt + 1}: {e}")
+            time.sleep(2 * (attempt + 1))
+            
+    print(f"Failed to fetch {normalized_url} after 3 attempts.")
+    return None
 
 def generate_post_from_urls():
     """
@@ -53,35 +75,34 @@ def generate_post_from_urls():
     """
     associate_tag = os.getenv("ASSOCIATE_TAG")
     if not associate_tag:
-        print("🔴 Error: ASSOCIATE_TAG not found in environment variables.")
+        print("Error: ASSOCIATE_TAG not found in environment variables.")
         return
 
     try:
         with open("urls.txt", "r", encoding="utf-8") as f:
             urls = [line.strip() for line in f if line.strip()]
     except FileNotFoundError:
-        print("🟡 Info: urls.txt not found. Skipping post generation.")
+        print("Info: urls.txt not found. Skipping post generation.")
         return
         
     if not urls:
-        print("🟡 Info: urls.txt is empty. Skipping post generation.")
+        print("Info: urls.txt is empty. Skipping post generation.")
         return
 
-    # --- Fetch product details for each URL ---
-    print(f"ℹ️ Found {len(urls)} URLs. Fetching details...")
+    print(f"Found {len(urls)} URLs. Fetching details...")
     products = []
     for url in urls[:5]: # Process up to 5 URLs
         details = get_product_details(url, associate_tag)
         if details:
             products.append(details)
+        time.sleep(1) # Be respectful and wait 1 second between requests
     
     if not products:
-        print("🔴 Error: Could not fetch details for any of the URLs.")
+        print("Error: Could not fetch valid details for any of the URLs provided.")
         return
 
     # --- Generate Markdown Content ---
     today = datetime.now().strftime("%Y-%m-%d")
-    # Use a generic title as we don't have a single search keyword anymore
     post_title = f"【{today}更新】編集部おすすめガジェットランキングTOP{len(products)}"
     filename = f"{today}-recommended-gadgets-ranking.md"
     
@@ -115,9 +136,9 @@ AIエージェントのクローと編集部が厳選した、おすすめガジ
     try:
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(markdown_content)
-        print(f"✅ Successfully generated post from URL list: {output_path}")
+        print(f"Successfully generated post from URL list: {output_path}")
     except Exception as e:
-        print(f"🔴 Error writing to file: {e}")
+        print(f"Error writing to file: {e}")
 
 
 if __name__ == "__main__":
