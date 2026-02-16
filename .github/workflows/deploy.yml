@@ -1,4 +1,4 @@
-name: Deploy to Lolipop
+name: Deploy to Lolipop (Password Auth)
 
 on:
   push:
@@ -12,7 +12,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
         with:
-          submodules: true  # PaperModテーマを読み込むために必要
+          submodules: true
 
       - name: Setup Hugo
         uses: peaceiris/actions-hugo@v2
@@ -22,6 +22,9 @@ jobs:
       - name: Build
         run: hugo --minify
 
+      - name: List files after build # デバッグ用：publicフォルダがあるか確認
+        run: ls -la
+
       - name: Deploy
         uses: appleboy/ssh-action@master
         with:
@@ -30,7 +33,5 @@ jobs:
           password: ${{ secrets.SSH_PASSWORD }}
           port: ${{ secrets.SSH_PORT }}
           script: |
-            # サーバーにディレクトリがなければ作成
             mkdir -p ${{ secrets.REMOTE_PATH }}
-            # publicフォルダの中身をサーバーに同期
             rsync -avz --delete ./public/ ${{ secrets.REMOTE_PATH }}
