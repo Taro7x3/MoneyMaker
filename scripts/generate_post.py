@@ -1,6 +1,6 @@
 import os
 from datetime import datetime
-from creators.apis.search import search_items, SearchItemsRequest
+from amazon_creatorsapi import AmazonCreatorsApi, Country
 
 def generate_post():
     # --- 1. API Credentials ---
@@ -12,14 +12,24 @@ def generate_post():
         print("🔴 Error: API credentials not found in environment variables.")
         return
 
-    # --- 2. Search for Products using the new library ---
+    # --- 2. Initialize the official API client ---
+    try:
+        api = AmazonCreatorsApi(
+            credential_id=access_key,
+            credential_secret=secret_key,
+            tag=associate_tag,
+            country=Country.JP,
+            version="2.2" # Specify a valid version for JP
+        )
+    except Exception as e:
+        print(f"🔴 Error initializing Amazon API: {e}")
+        return
+
+    # --- 3. Search for Products ---
     search_keywords = "PCモニター 4K"
     try:
-        request = SearchItemsRequest(
-            partner_tag=associate_tag,
-            partner_type="associates",
+        results = api.search_items(
             keywords=search_keywords,
-            marketplace="JP",
             item_count=10,
             resources=[
                 "Images.Primary.Medium",
@@ -27,16 +37,14 @@ def generate_post():
                 "Offers.Listings.Price",
             ],
         )
-        search_result = search_items(access_key, secret_key, request)
-
     except Exception as e:
         print(f"🔴 Error searching for items: {e}")
         return
 
-    # --- 3. Filter and Process Products ---
+    # --- 4. Filter and Process Products ---
     products = []
-    if search_result.search_result and search_result.search_result.items:
-        for item in search_result.search_result.items:
+    if results and results.items:
+        for item in results.items:
             if item.offers and item.offers.listings and item.offers.listings[0].price:
                 products.append({
                     "title": item.item_info.title.display_value,
@@ -51,7 +59,7 @@ def generate_post():
         print("🟡 Warning: No products with price information found. This could be due to API limitations (e.g., needing 3 sales).")
         return
 
-    # --- 4. Generate Markdown Content ---
+    # --- 5. Generate Markdown Content ---
     today = datetime.now().strftime("%Y-%m-%d")
     sanitized_keywords = search_keywords.replace(" ", "-").lower()
     filename = f"{today}-{sanitized_keywords}-ranking.md"
@@ -79,7 +87,7 @@ AIエージェントのクローが、Amazonの最新データから「{search_k
 ***
 """
     
-    # --- 5. Write to File ---
+    # --- 6. Write to File ---
     output_path = os.path.join("content", "posts", filename)
     try:
         with open(output_path, "w", encoding="utf-8") as f:
