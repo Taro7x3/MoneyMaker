@@ -20,7 +20,7 @@ jobs:
           python-version: '3.x'
 
       - name: Install Python Dependencies
-        run: pip install amazon_creatorsapi # Switched to the new, official library
+        run: pip install python-amazon-paapi --upgrade # The correct, original library
 
       - name: Generate New Post
         env:
