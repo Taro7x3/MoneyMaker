@@ -12,14 +12,13 @@ def generate_post():
         print("🔴 Error: API credentials not found in environment variables.")
         return
 
-    # --- 2. Initialize the official API client ---
+    # --- 2. Initialize the official API client (without version) ---
     try:
         api = AmazonCreatorsApi(
             credential_id=access_key,
             credential_secret=secret_key,
             tag=associate_tag,
-            country=Country.JP,
-            version="2.2"
+            country=Country.JP
         )
     except Exception as e:
         print(f"🔴 Error initializing Amazon API: {e}")
@@ -34,7 +33,7 @@ def generate_post():
             resources=[
                 "images.primary.medium",
                 "itemInfo.title",
-                "offersV2.listings.price", # Using the correct V2 resource
+                "offersV2.listings.price",
             ],
         )
     except Exception as e:
@@ -45,7 +44,6 @@ def generate_post():
     products = []
     if results and results.items:
         for item in results.items:
-            # Check offers_v2 as we are requesting V2 resources
             if item.offers_v2 and item.offers_v2.listings and item.offers_v2.listings[0].price:
                 products.append({
                     "title": item.item_info.title.display_value,
