@@ -14,7 +14,7 @@ def generate_post():
 
     # --- 2. Connect to Amazon API ---
     try:
-        amazon = AmazonApi(access_key, secret_key, associate_tag, "JP", version="2.0")
+        amazon = AmazonApi(access_key, secret_key, associate_tag, "JP")
     except Exception as e:
         print(f"🔴 Error connecting to Amazon API: {e}")
         return
