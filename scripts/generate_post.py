@@ -22,12 +22,12 @@ def generate_post():
     # --- 3. Search for Products ---
     search_keywords = "PCモニター 4K"
     try:
+        # FIX: Removed 'ItemInfo.Title' from resources as the library includes it by default.
         search_result = amazon.search_items(
             keywords=search_keywords,
-            item_count=10, # Get a few extra in case some don't have prices
+            item_count=10,
             resources=[
                 "Images.Primary.Medium",
-                "ItemInfo.Title",
                 "Offers.Listings.Price",
             ],
         )
@@ -39,7 +39,8 @@ def generate_post():
     products = []
     if search_result.items:
         for item in search_result.items:
-            if item.offers and item.offers.listings and item.offers.listings[0].price:
+            # The library returns ItemInfo by default, so we can safely access it.
+            if item.item_info and item.item_info.title and item.offers and item.offers.listings and item.offers.listings[0].price:
                 products.append({
                     "title": item.item_info.title.display_value,
                     "price": item.offers.listings[0].price.display_amount,
@@ -47,10 +48,10 @@ def generate_post():
                     "image_url": item.images.primary.medium.url,
                 })
             if len(products) >= 5:
-                break # We only want the top 5 with prices
+                break
 
     if not products:
-        print("🟡 Warning: No products with price information found.")
+        print("🟡 Warning: No products with price information found. This could be due to API limitations (e.g., needing 3 sales).")
         return
 
     # --- 5. Generate Markdown Content ---
@@ -58,7 +59,6 @@ def generate_post():
     sanitized_keywords = search_keywords.replace(" ", "-").lower()
     filename = f"{today}-{sanitized_keywords}-ranking.md"
     
-    # Create the front matter
     markdown_content = f"""---
 title: "【{today}更新】{search_keywords} おすすめ人気ランキングTOP5"
 date: {datetime.now().isoformat()}
@@ -71,7 +71,6 @@ AIエージェントのクローが、Amazonの最新データから「{search_k
 
 """
 
-    # Create the body content with product list
     for i, product in enumerate(products):
         rank = i + 1
         markdown_content += f"""
@@ -86,7 +85,6 @@ AIエージェントのクローが、Amazonの最新データから「{search_k
 """
     
     # --- 6. Write to File ---
-    # Assuming the script runs from the project root
     output_path = os.path.join("content", "posts", filename)
     try:
         with open(output_path, "w", encoding="utf-8") as f:
