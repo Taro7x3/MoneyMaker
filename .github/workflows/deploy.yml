@@ -1,4 +1,4 @@
-name: Deploy to Lolipop via SFTP
+name: Deploy to Lolipop via SFTP (Final)
 
 on:
   push:
@@ -22,14 +22,12 @@ jobs:
       - name: Build
         run: hugo --minify
 
-      - name: FTP Deploy
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
+      - name: SFTP Deploy
+        uses: easingthemes/sftp-deploy@v2.2.1
         with:
-          server: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USERNAME }}
-          password: ${{ secrets.SSH_PASSWORD }}
-          port: ${{ secrets.SSH_PORT }}
-          local-dir: ./public/
-          server-dir: ${{ secrets.REMOTE_PATH }}
-          protocol: sftp # lolipop uses SFTP
-          timeout: 30000
+          server_host: ${{ secrets.SSH_HOST }}
+          server_port: ${{ secrets.SSH_PORT }}
+          ssh_username: ${{ secrets.SSH_USERNAME }}
+          ssh_password: ${{ secrets.SSH_PASSWORD }}
+          local_path: ./public/
+          remote_path: ${{ secrets.REMOTE_PATH }}
