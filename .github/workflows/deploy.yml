@@ -1,4 +1,4 @@
-name: Deploy to Lolipop via SFTP (Final)
+name: Deploy to Lolipop via lftp (The Right Way)
 
 on:
   push:
@@ -22,12 +22,8 @@ jobs:
       - name: Build
         run: hugo --minify
 
-      - name: SFTP Deploy
-        uses: easingthemes/sftp-deploy@v2.2.1
-        with:
-          server_host: ${{ secrets.SSH_HOST }}
-          server_port: ${{ secrets.SSH_PORT }}
-          ssh_username: ${{ secrets.SSH_USERNAME }}
-          ssh_password: ${{ secrets.SSH_PASSWORD }}
-          local_path: ./public/
-          remote_path: ${{ secrets.REMOTE_PATH }}
+      - name: Deploy with lftp
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lftp
+          lftp -u "${{ secrets.SSH_USERNAME }},${{ secrets.SSH_PASSWORD }}" -p ${{ secrets.SSH_PORT }} sftp://${{ secrets.SSH_HOST }} -e "set sftp:auto-confirm yes; mirror -R --delete --verbose ./public/ ${{ secrets.REMOTE_PATH }}; quit"
