@@ -1,4 +1,4 @@
-name: Deploy to Lolipop (Password Auth)
+name: Deploy to Lolipop via SFTP
 
 on:
   push:
@@ -22,16 +22,14 @@ jobs:
       - name: Build
         run: hugo --minify
 
-      - name: List files after build # デバッグ用：publicフォルダがあるか確認
-        run: ls -la
-
-      - name: Deploy
-        uses: appleboy/ssh-action@master
+      - name: FTP Deploy
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
         with:
-          host: ${{ secrets.SSH_HOST }}
+          server: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USERNAME }}
           password: ${{ secrets.SSH_PASSWORD }}
           port: ${{ secrets.SSH_PORT }}
-          script: |
-            mkdir -p ${{ secrets.REMOTE_PATH }}
-            rsync -avz --delete ./public/ ${{ secrets.REMOTE_PATH }}
+          local-dir: ./public/
+          server-dir: ${{ secrets.REMOTE_PATH }}
+          protocol: sftp # lolipop uses SFTP
+          timeout: 30000
