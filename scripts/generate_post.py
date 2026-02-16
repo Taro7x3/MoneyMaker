@@ -26,6 +26,10 @@ def generate_post():
         search_result = amazon.search_items(
             keywords=search_keywords,
             item_count=10,
+            resources=[
+                "Images.Primary.Medium",
+                "Offers.Listings.Price",
+            ],
         )
     except Exception as e:
         print(f"🔴 Error searching for items: {e}")
