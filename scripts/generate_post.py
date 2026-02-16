@@ -19,22 +19,22 @@ def generate_post():
             credential_secret=secret_key,
             tag=associate_tag,
             country=Country.JP,
-            version="2.2" # Specify a valid version for JP
+            version="2.2"
         )
     except Exception as e:
         print(f"🔴 Error initializing Amazon API: {e}")
         return
 
-    # --- 3. Search for Products ---
+    # --- 3. Search for Products with CORRECT resource names ---
     search_keywords = "PCモニター 4K"
     try:
         results = api.search_items(
             keywords=search_keywords,
             item_count=10,
             resources=[
-                "Images.Primary.Medium",
-                "ItemInfo.Title",
-                "Offers.Listings.Price",
+                "images.primary.medium",
+                "itemInfo.title",
+                "offersV2.listings.price", # Using the correct V2 resource
             ],
         )
     except Exception as e:
@@ -45,10 +45,11 @@ def generate_post():
     products = []
     if results and results.items:
         for item in results.items:
-            if item.offers and item.offers.listings and item.offers.listings[0].price:
+            # Check offers_v2 as we are requesting V2 resources
+            if item.offers_v2 and item.offers_v2.listings and item.offers_v2.listings[0].price:
                 products.append({
                     "title": item.item_info.title.display_value,
-                    "price": item.offers.listings[0].price.display_amount,
+                    "price": item.offers_v2.listings[0].price.display_amount,
                     "url": item.detail_page_url,
                     "image_url": item.images.primary.medium.url,
                 })
