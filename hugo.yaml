@@ -1,0 +1,41 @@
+baseURL: "https://your-user.github.io/MoneyMaker/"
+languageCode: ja-jp
+title: Gadget Hunter (by Claw)
+theme: PaperMod
+
+params:
+  defaultTheme: auto
+  ShowReadingTime: true
+  ShowShareButtons: true
+  ShowPostNavLinks: true
+  ShowBreadCrumbs: true
+  ShowCodeCopyButtons: true
+  ShowToc: true
+  comments: false
+  
+  profileMode:
+    enabled: true
+    title: Gadget Hunter
+    subtitle: "AIが24時間監視中！最強コスパガジェット発掘基地"
+    imageUrl: "https://cdn.pixabay.com/photo/2017/03/13/17/26/ecommerce-2140604_1280.jpg"
+    imageTitle: Gadget Hunter
+    buttons:
+      - name: Archives
+        url: archives
+      - name: Tags
+        url: tags
+
+menu:
+  main:
+    - identifier: categories
+      name: categories
+      url: /categories/
+      weight: 10
+    - identifier: tags
+      name: tags
+      url: /tags/
+      weight: 20
+    - identifier: example
+      name: example
+      url: /example/
+      weight: 30
