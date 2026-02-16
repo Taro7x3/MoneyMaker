@@ -1,9 +1,9 @@
 import os
 from datetime import datetime
-from amazon_creatorsapi import AmazonCreatorsApi, Country
+from amazon_paapi import AmazonApi
 
 def generate_post():
-    # --- 1. API Credentials ---
+    # --- 1. API Credentials (from GitHub Secrets) ---
     access_key = os.getenv("PAAPI_ACCESS_KEY")
     secret_key = os.getenv("PAAPI_SECRET_KEY")
     associate_tag = os.getenv("ASSOCIATE_TAG")
@@ -12,28 +12,23 @@ def generate_post():
         print("🔴 Error: API credentials not found in environment variables.")
         return
 
-    # --- 2. Initialize the official API client (without version) ---
+    # --- 2. Connect to Amazon API ---
     try:
-        api = AmazonCreatorsApi(
-            credential_id=access_key,
-            credential_secret=secret_key,
-            tag=associate_tag,
-            country=Country.JP
-        )
+        amazon = AmazonApi(access_key, secret_key, associate_tag, "JP", version="2.0")
     except Exception as e:
-        print(f"🔴 Error initializing Amazon API: {e}")
+        print(f"🔴 Error connecting to Amazon API: {e}")
         return
 
-    # --- 3. Search for Products with CORRECT resource names ---
+    # --- 3. Search for Products ---
     search_keywords = "PCモニター 4K"
     try:
-        results = api.search_items(
+        # FIX: Removed 'ItemInfo.Title' from resources as the library includes it by default.
+        search_result = amazon.search_items(
             keywords=search_keywords,
             item_count=10,
             resources=[
-                "images.primary.medium",
-                "itemInfo.title",
-                "offersV2.listings.price",
+                "Images.Primary.Medium",
+                "Offers.Listings.Price",
             ],
         )
     except Exception as e:
@@ -42,12 +37,13 @@ def generate_post():
 
     # --- 4. Filter and Process Products ---
     products = []
-    if results and results.items:
-        for item in results.items:
-            if item.offers_v2 and item.offers_v2.listings and item.offers_v2.listings[0].price:
+    if search_result.items:
+        for item in search_result.items:
+            # The library returns ItemInfo by default, so we can safely access it.
+            if item.item_info and item.item_info.title and item.offers and item.offers.listings and item.offers.listings[0].price:
                 products.append({
                     "title": item.item_info.title.display_value,
-                    "price": item.offers_v2.listings[0].price.display_amount,
+                    "price": item.offers.listings[0].price.display_amount,
                     "url": item.detail_page_url,
                     "image_url": item.images.primary.medium.url,
                 })
@@ -70,7 +66,9 @@ draft: false
 tags: ["Ranking", "Gadget", "{search_keywords}"]
 categories: ["Automated Ranking"]
 ---
+
 AIエージェントのクローが、Amazonの最新データから「{search_keywords}」のおすすめ人気ランキングTOP5を自動生成しました。日々の価格変動をチェックして、賢い買い物をサポートします！
+
 """
 
     for i, product in enumerate(products):
@@ -94,6 +92,7 @@ AIエージェントのクローが、Amazonの最新データから「{search_k
         print(f"✅ Successfully generated post: {output_path}")
     except Exception as e:
         print(f"🔴 Error writing to file: {e}")
+
 
 if __name__ == "__main__":
     generate_post()
